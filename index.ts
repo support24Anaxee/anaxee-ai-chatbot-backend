@@ -5,6 +5,7 @@ import { config } from './config/env.config';
 import userRoutes from './routes/user.routes';
 import chatRoutes from './routes/chat.routes';
 import projectRoutes from './routes/project.routes';
+import sqlAssistantRoutes from './routes/sql-assistant.routes';
 import { sendError } from './utils/response';
 import { AppError } from './utils/errors';
 import logger from './utils/logger';
@@ -20,6 +21,7 @@ app.use(morgan('dev'));
 app.use('/api/users', userRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/projects', projectRoutes);
+app.use('/api/sql-assistant', sqlAssistantRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

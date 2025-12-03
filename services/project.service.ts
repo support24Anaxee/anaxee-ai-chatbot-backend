@@ -1,11 +1,26 @@
 import { eq } from 'drizzle-orm';
 import { db } from '../config/db.config';
 import { projects } from '../models/projects';
+import { DatabaseConfig } from '../types/sql-assistant.types';
 
-export const createProject = async (name: string, slug: string, scriptName: string) => {
+export const createProject = async (
+    name: string,
+    slug: string,
+    scriptName: string,
+    tables?: string[],
+    businessRule?: string,
+    dbConfig?: DatabaseConfig
+) => {
     try {
-        const [result] = await db.insert(projects).values({ name, slug, scriptName }).$returningId();
-        return { id: result.id, name, slug, scriptName };
+        const [result] = await db.insert(projects).values({
+            name,
+            slug,
+            scriptName,
+            tables,
+            businessRule,
+            dbConfig,
+        }).$returningId();
+        return { id: result.id, name, slug, scriptName, tables, businessRule, dbConfig };
     } catch (error) {
         throw error;
     }
