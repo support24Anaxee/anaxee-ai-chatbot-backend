@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "np"
+    "start": "tsx --watch ./index.ts"
   },
   "author": "sieg32",
   "license": "ISC",
