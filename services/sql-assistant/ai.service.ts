@@ -9,6 +9,7 @@ import logger from '../../utils/logger';
 export class AIService {
     private client: any;
     private config: AIModelConfig;
+    private lastTokenUsage: any = null;
 
     constructor(config: AIModelConfig) {
         this.config = config;
@@ -54,6 +55,10 @@ export class AIService {
                 contents: [prompt],
             });
             console.log(JSON.stringify(response.usageMetadata));
+
+            // Store token usage
+            this.lastTokenUsage = response.usageMetadata;
+
             return response.text;
         } catch (error) {
             logger.error('Error generating content:', error);
@@ -92,5 +97,12 @@ export class AIService {
                 `Failed to generate content stream: ${error instanceof Error ? error.message : String(error)}`
             );
         }
+    }
+
+    /**
+     * Get last token usage metadata
+     */
+    getLastTokenUsage(): any {
+        return this.lastTokenUsage;
     }
 }

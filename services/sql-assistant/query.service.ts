@@ -102,16 +102,18 @@ ${businessRules}`;
         schema: string,
         userQuery: string,
         chatHistory: string = ''
-    ): Promise<{ sql: string; rows: RowDataPacket[] }> {
+    ): Promise<{ sql: string; rows: RowDataPacket[], executionTime:number }> {
         console.time('generateSQLQuery')
         const sql = await this.generateSQLQuery(tableNames, schema, userQuery, chatHistory);
         console.timeEnd('generateSQLQuery')
         if (sql === 'NO_RELEVANT_DATA') {
-            return { sql, rows: [] };
+            return { sql, rows: [], executionTime:0 };
         }
         console.time('executionQuery')
+        const timeStart = Date.now()
         const rows = await this.executeQuery(sql);
+        const executionTime = Date.now() - timeStart ;
         console.timeEnd('executionQuery')
-        return { sql, rows };
+        return { sql, rows, executionTime };
     }
 }

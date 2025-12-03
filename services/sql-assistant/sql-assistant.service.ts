@@ -1,9 +1,10 @@
-import { DatabaseService } from './database.service';
-import { SchemaService } from './schema.service';
-import { AIService } from './ai.service';
-import { QueryService } from './query.service';
-import { ResponseService } from './response.service';
-import { BusinessRuleService } from './business-rule.service';
+import { DatabaseService}from './database.service';
+import { SchemaService}from './schema.service';
+import { AIService}from './ai.service';
+import { QueryService}from './query.service';
+import { ResponseService}from './response.service';
+import { BusinessRuleService}from './business-rule.service';
+import { createLog}from '../sql-assistant-logging.service';
 import {
     DatabaseConfig,
     AIProvider,
@@ -29,8 +30,10 @@ export class SQLAssistantService {
     private responseService: ResponseService;
     private businessRuleService: BusinessRuleService;
     private tableNames: string[];
+    private projectConfig: ProjectConfig;
 
     constructor(projectConfig: ProjectConfig, dbConfig: DatabaseConfig) {
+        this.projectConfig = projectConfig;
         // Initialize services
         this.databaseService = new DatabaseService(dbConfig);
         this.schemaService = new SchemaService(this.databaseService, projectConfig.id);
@@ -95,7 +98,7 @@ export class SQLAssistantService {
             const schema = await this.schemaService.getTableSchemaAsCSV(this.tableNames);
 
             // Step 2: Generate and execute SQL
-            const { sql, rows } = await this.queryService.generateAndExecute(
+            const { sql, rows}= await this.queryService.generateAndExecute(
                 this.tableNames,
                 schema,
                 query,
@@ -120,7 +123,7 @@ export class SQLAssistantService {
             );
 
             return response;
-        } catch (error) {
+       }catch (error) {
             if (
                 error instanceof DatabaseConnectionError ||
                 error instanceof SchemaRetrievalError ||
@@ -139,34 +142,52 @@ export class SQLAssistantService {
      */
     async *askStream(
         query: string,
-        chatHistory: string = ''
+        chatHistory: string = '',
+        chatId?: number
     ): AsyncGenerator<StreamEvent> {
+        const startTime = Date.now();
+        let schemaFetchTime = 0;
+        let sqlGenerationTime = 0;
+        let queryExecutionTime = 0;
+        let responseGenerationTime = 0;
+        let generatedSql = '';
+        let rowCount = 0;
+        let tokenUsage: any = null;
+        let status: 'success' | 'error' | 'no_data' = 'success';
+        let errorMessage: string | undefined;
+
         try {
             // Step 1: Get schema
             yield {
                 type: StreamEventType.STATUS,
                 content: 'Analyzing database schema...',
             };
-            console.time('getTableSchema')
+            const schemaStart = Date.now();
             const schema = await this.schemaService.getTableSchemaAsCSV(this.tableNames);
-            console.timeEnd('getTableSchema')
+            schemaFetchTime = Date.now() - schemaStart;
 
             // Step 2: Generate SQL
             yield {
                 type: StreamEventType.STATUS,
                 content: 'Generating SQL query...',
             };
-            console.time('generateAndExecute')
-            const { sql, rows } = await this.queryService.generateAndExecute(
+            const sqlStart = Date.now();
+            const { sql, rows, executionTime}= await this.queryService.generateAndExecute(
                 this.tableNames,
                 schema,
                 query,
                 chatHistory
             );
-            console.timeEnd('generateAndExecute')
+            console.log(executionTime)
+            queryExecutionTime = executionTime;
+            const sqlEnd = Date.now();
+            sqlGenerationTime = sqlEnd - sqlStart;
+            generatedSql = sql;
+            rowCount = rows.length;
 
             // Check for no relevant data
             if (sql === 'NO_RELEVANT_DATA') {
+                status = 'no_data';
                 yield {
                     type: StreamEventType.CONTENT,
                     content: "I couldn't find relevant data in the table for your query.",
@@ -174,7 +195,19 @@ export class SQLAssistantService {
                 yield {
                     type: StreamEventType.DONE,
                     content: 'Done'
-                }   
+                };
+
+                // Log before return
+                await createLog({
+                    chatId,
+                    projectId: this.projectConfig.id,
+                    userMessage: query,
+                    generatedSql: sql,
+                    executionTimeMs: Date.now() - startTime,
+                    schemaFetchTimeMs: schemaFetchTime,
+                    sqlGenerationTimeMs: sqlGenerationTime,
+                    status,
+                });
                 return;
             }
 
@@ -183,22 +216,41 @@ export class SQLAssistantService {
                 type: StreamEventType.STATUS,
                 content: 'Executing SQL query...',
             };
-           
+
             // Check for no results
             if (rows.length === 0) {
+                status = 'no_data';
                 yield {
                     type: StreamEventType.CONTENT,
                     content: 'Your query executed successfully, but no results were found.',
                 };
+                yield {
+                    type: StreamEventType.DONE,
+                    content: 'Done'
+                };
+
+                // Log before return
+                await createLog({
+                    chatId,
+                    projectId: this.projectConfig.id,
+                    userMessage: query,
+                    generatedSql: sql,
+                    executionTimeMs: Date.now() - startTime,
+                    queryExecutionTimeMs: queryExecutionTime,
+                    schemaFetchTimeMs: schemaFetchTime,
+                    sqlGenerationTimeMs: sqlGenerationTime,
+                    rowCount: 0,
+                    status,
+                });
                 return;
             }
-          
+
             // Step 3: Generate response
             yield {
                 type: StreamEventType.STATUS,
                 content: 'Formulating response...',
             };
-            console.time('generateResponseStream')
+            const responseStart = Date.now();
             for await (const chunk of this.responseService.generateResponseStream(
                 rows,
                 query,
@@ -209,7 +261,11 @@ export class SQLAssistantService {
                     content: chunk,
                 };
             }
-            console.timeEnd('generateResponseStream')
+            responseGenerationTime = Date.now() - responseStart;
+
+            // Get token usage from AI service
+            tokenUsage = this.aiService.getLastTokenUsage();
+
             // Send metadata
             yield {
                 type: StreamEventType.METADATA,
@@ -218,10 +274,29 @@ export class SQLAssistantService {
             };
 
             yield {
-                type:StreamEventType.DONE,
+                type: StreamEventType.DONE,
                 content: 'Done'
-            }
-        } catch (error) {
+            };
+
+            // Log successful execution
+            await createLog({
+                chatId,
+                projectId: this.projectConfig.id,
+                userMessage: query,
+                generatedSql: sql,
+                executionTimeMs: Date.now() - startTime,
+                schemaFetchTimeMs: schemaFetchTime,
+                queryExecutionTimeMs:queryExecutionTime,
+                sqlGenerationTimeMs: sqlGenerationTime,
+                responseGenerationTimeMs: responseGenerationTime,
+                rowCount: rows.length,
+                tokenUsage,
+                status: 'success',
+            });
+       }catch (error) {
+            status = 'error';
+            errorMessage = error instanceof Error ? error.message : String(error);
+
             if (
                 error instanceof DatabaseConnectionError ||
                 error instanceof SchemaRetrievalError ||
@@ -231,13 +306,27 @@ export class SQLAssistantService {
                     type: StreamEventType.ERROR,
                     content: `Error: ${error.message}`,
                 };
-            } else {
+           }else {
                 logger.error('Unexpected error in askStream():', error);
                 yield {
                     type: StreamEventType.ERROR,
                     content: `An unexpected error occurred: ${error instanceof Error ? error.message : String(error)}`,
                 };
             }
+
+            // Log error
+            await createLog({
+                chatId,
+                projectId: this.projectConfig.id,
+                userMessage: query,
+                generatedSql,
+                executionTimeMs: Date.now() - startTime,
+                schemaFetchTimeMs: schemaFetchTime,
+                sqlGenerationTimeMs: sqlGenerationTime,
+                rowCount,
+                status,
+                errorMessage,
+            });
         }
     }
 

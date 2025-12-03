@@ -151,7 +151,7 @@ export const executeQueryStream = async (req: Request, res: Response) => {
 
         // Stream response and collect full response
         let fullResponse = '';
-        for await (const event of assistant.askStream(query, chatHistory)) {
+        for await (const event of assistant.askStream(query, chatHistory, chatId)) {
             // Collect content chunks
             if (event.type === StreamEventType.CONTENT && event.content) {
                 fullResponse += event.content;
