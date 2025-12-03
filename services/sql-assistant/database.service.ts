@@ -31,6 +31,7 @@ export class DatabaseService {
                 queueLimit: 0,
                 enableKeepAlive: true,
                 keepAliveInitialDelay: 0,
+            
             });
 
             // Test connection

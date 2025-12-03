@@ -23,7 +23,10 @@ export class QueryService {
         tableNames: string[],
         schema: string,
         userQuery: string,
-        chatHistory: string = ''
+        chatHistory: string = '',
+        lastGeneratedQuery?:string,
+        lastError?:string
+
     ): Promise<string> {
         try {
             // Get business rules
@@ -37,7 +40,13 @@ ${schema}
 Chat History:
 ${chatHistory}
 
-Question: ${userQuery}`;
+Question: ${userQuery}
+
+${(lastGeneratedQuery && lastError) ? `Last Generated Query : ${lastGeneratedQuery} \n Last Error : ${lastError}` : ''}
+`
+
+
+;
 
             const systemInstruction = `Required Output: SQL Query String
 
@@ -111,7 +120,15 @@ ${businessRules}`;
         }
         console.time('executionQuery')
         const timeStart = Date.now()
-        const rows = await this.executeQuery(sql);
+        let rows;
+        try {
+            
+             rows = await this.executeQuery(sql);
+        } catch (error) {
+            logger.error('SQL execution error retrying: ', error);
+            const sqlNew = await this.generateSQLQuery(tableNames, schema, userQuery, chatHistory, sql, error instanceof Error ? error.message : String(error));
+            rows = await this.executeQuery(sqlNew);
+        }
         const executionTime = Date.now() - timeStart ;
         console.timeEnd('executionQuery')
         return { sql, rows, executionTime };
