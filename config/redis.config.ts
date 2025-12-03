@@ -10,16 +10,19 @@ class RedisClient {
 
     static getInstance(): Redis {
         if (!this.instance) {
+            console.log(config.redis)
             this.instance = new Redis({
+                username:'default',
                 host: config.redis?.host || 'localhost',
                 port: config.redis?.port || 6379,
                 password: config.redis?.password,
-                db: config.redis?.db || 0,
+                // db: config.redis?.db || 0,
                 retryStrategy: (times: number) => {
                     const delay = Math.min(times * 50, 2000);
                     return delay;
                 },
                 maxRetriesPerRequest: 3,
+                tls: config.nodeEnv === 'development' ? undefined: {},
             });
 
             this.instance.on('connect', () => {
@@ -28,6 +31,7 @@ class RedisClient {
 
             this.instance.on('error', (err) => {
                 logger.error('Redis client error:', err);
+                console.log(err)
             });
 
             this.instance.on('ready', () => {
