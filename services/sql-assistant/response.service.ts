@@ -80,7 +80,9 @@ User Query: ${userQuery}`;
 6. Maintain a natural, conversational tone
 7. Reference specific numbers and facts from the results
 8. If the user explicitly asks for a chart or graph AND the data is suitable (numerical data with categories or time series), use the generate_chart tool.
-9. Do NOT generate a chart unless explicitly asked.`;
+9. Do NOT generate a chart unless explicitly asked.
+10. At the end of the response, suggest a few meaningful follow-up questions the user could ask to gain deeper insights from the data.
+11. All the amounts are in INR.`;
 
             const tools = [{
                 functionDeclarations: [{
@@ -168,7 +170,11 @@ User Query: ${userQuery}`;
 4. Use tables or lists when appropriate
 5. Maintain a natural, conversational tone
 6. If the user asks for clarification or details about previous results, provide them
-7. Do NOT make up or infer data that wasn't in the chat history`;
+7. Do NOT make up or infer data that wasn't in the chat history
+8. If the user explicitly asks for a chart or graph AND the data is suitable (numerical data with categories or time series), use the generate_chart tool.
+9. Do NOT generate a chart unless explicitly asked.
+10. At the end of the response, suggest a few meaningful follow-up questions the user could ask to gain deeper insights from the data.
+11. All the amounts are in INR.`;
 
             const response = await this.aiService.generateContent(
                 systemInstruction,
@@ -205,7 +211,9 @@ User Query: ${userQuery}`;
 6. If the user asks for clarification or details about previous results, provide them
 7. Do NOT make up or infer data that wasn't in the chat history
 8. If the user explicitly asks for a chart or graph AND the data is suitable (numerical data with categories or time series), use the generate_chart tool.
-9. Do NOT generate a chart unless explicitly asked.`;
+9. Do NOT generate a chart unless explicitly asked.
+10. At the end of the response, suggest a few meaningful follow-up questions the user could ask to gain deeper insights from the data.
+11. All the amounts are in INR.`;
 
             const tools = [{
                 functionDeclarations: [{

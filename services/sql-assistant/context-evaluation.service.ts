@@ -63,6 +63,7 @@ NEED_MORE_DATA - Use this if:
 - The query asks about a different time period, category, or dimension
 - The query is the first question in the conversation
 - You're uncertain whether the history has enough context
+- If User Explicitly Asked to refetch data
 
 Required Output Format:
 DECISION: [SUFFICIENT or NEED_MORE_DATA]
