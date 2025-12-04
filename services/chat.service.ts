@@ -11,7 +11,7 @@ import { NotFoundError } from '../utils/errors';
 import genAiService from './genAi.service';
 import logger from '../utils/logger';
 
-export const createChat = async (userId: number, projectSlug: string, topic?: string ) => {
+export const createChat = async (userId: number, projectSlug: string, topic?: string) => {
     try {
         const project = await getProjectBySlug(projectSlug);
         if (!project) {
@@ -21,8 +21,8 @@ export const createChat = async (userId: number, projectSlug: string, topic?: st
             topic = 'new chat';
         }
         console.log(userId, topic, project.id);
-        const [result] = await db.insert(chats).values({ userId, topic , projectId: project.id }).$returningId();
-        return { id: result.id, userId, topic, projectId: project.id , projectSlug: project.slug };
+        const [result] = await db.insert(chats).values({ userId, topic, projectId: project.id }).$returningId();
+        return { id: result.id, userId, topic, projectId: project.id, projectSlug: project.slug };
     } catch (error) {
         throw error;
     }
@@ -30,7 +30,7 @@ export const createChat = async (userId: number, projectSlug: string, topic?: st
 
 export const getChats = async (userId: number) => {
     try {
-        return await db.select({...chats, projectSlug: projects.slug}).from(chats).leftJoin(projects, eq(chats.projectId, projects.id)).where(eq(chats.userId, userId)).orderBy(desc(chats.createdAt));
+        return await db.select({ ...chats, projectSlug: projects.slug }).from(chats).leftJoin(projects, eq(chats.projectId, projects.id)).where(eq(chats.userId, userId)).orderBy(desc(chats.createdAt));
     } catch (error) {
         throw error;
     }
@@ -44,10 +44,10 @@ export const getMessages = async (chatId: number) => {
     }
 };
 
-export const sendMessage = async (chatId: number, content: string, role: string) => {
+export const sendMessage = async (chatId: number, content: string, role: string, chartSpec?: string) => {
     try {
-        const [result] = await db.insert(messages).values({ chatId, content, role }).$returningId();
-        return { id: result.id, chatId, content, role };
+        const [result] = await db.insert(messages).values({ chatId, content, role, chartSpec }).$returningId();
+        return { id: result.id, chatId, content, role, chartSpec };
     } catch (error) {
         throw error;
     }
@@ -134,7 +134,7 @@ export async function* processAiResponseStream(chatId: number) {
         // 1. Fetch chat history
         const chatMessages = await getMessages(chatId);
 
-       
+
         // 2. Prepare input for Python script
         const input = {
             messages: chatMessages.map(msg => ({
@@ -215,19 +215,19 @@ export async function* processAiResponseStream(chatId: number) {
 
         // Save the complete AI response
         if (fullResponse) {
-             if(chatMessages.length === 1){
-            try {
-                console.log(fullResponse, 'fullResponse');
-                const chatTitle = await genAiService.generateChatTitle(fullResponse);
-                if(chatTitle){
+            if (chatMessages.length === 1) {
+                try {
+                    console.log(fullResponse, 'fullResponse');
+                    const chatTitle = await genAiService.generateChatTitle(fullResponse);
+                    if (chatTitle) {
 
-                    await db.update(chats).set({ topic: chatTitle }).where(eq(chats.id, chatId));
+                        await db.update(chats).set({ topic: chatTitle }).where(eq(chats.id, chatId));
+                    }
+                } catch (error) {
+                    logger.error(error);
                 }
-            } catch (error) {
-                logger.error(error);
+
             }
-            
-        }
             await sendMessage(chatId, fullResponse, 'assistant');
             yield { type: 'done', messageId: chatId };
         }

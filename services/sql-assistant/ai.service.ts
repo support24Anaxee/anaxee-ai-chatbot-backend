@@ -71,24 +71,38 @@ export class AIService {
     /**
      * Generate content with streaming
      */
+    /**
+     * Generate content with streaming
+     */
     async *generateContentStream(
         systemInstruction: string,
         prompt: string,
-        temperature?: number
-    ): AsyncGenerator<string> {
+        temperature?: number,
+        tools?: any[]
+    ): AsyncGenerator<any> {
         try {
             const response = await this.client.models.generateContentStream({
                 model: this.config.model,
                 config: {
                     systemInstruction,
                     temperature: temperature ?? this.config.temperature ?? 0.3,
+                    tools: tools,
                 },
                 contents: [prompt],
             });
 
             for await (const chunk of response) {
+                // Handle text content
                 if (chunk.text) {
-                    yield chunk.text;
+                    yield { type: 'text', content: chunk.text };
+                }
+
+                // Handle function calls
+                const functionCalls = chunk.functionCalls;
+                if (functionCalls && functionCalls.length > 0) {
+                    for (const call of functionCalls) {
+                        yield { type: 'function_call', name: call.name, args: call.args };
+                    }
                 }
             }
         } catch (error) {

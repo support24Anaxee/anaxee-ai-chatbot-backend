@@ -163,18 +163,24 @@ export const executeQueryStream = async (req: Request, res: Response) => {
 
         // Stream response and collect full response
         let fullResponse = '';
+        let chartSpec: string | undefined;
+
         for await (const event of assistant.askStream(query, chatHistory, chatId)) {
             // Collect content chunks
             if (event.type === StreamEventType.CONTENT && event.content) {
                 fullResponse += event.content;
+            }
+            // Collect chart spec
+            if (event.type === StreamEventType.CHART && event.chartSpec) {
+                chartSpec = JSON.stringify(event.chartSpec);
             }
 
             res.write(`data: ${JSON.stringify(event)}\n\n`);
         }
 
         // Save assistant response if chatId provided
-        if (chatId && fullResponse) {
-            await sendMessage(chatId, fullResponse, 'assistant');
+        if (chatId && (fullResponse || chartSpec)) {
+            await sendMessage(chatId, fullResponse || '', 'assistant', chartSpec);
         }
 
         res.end();

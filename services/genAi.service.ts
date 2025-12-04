@@ -1,17 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import logger from "../utils/logger";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-async function main() {
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: "Explain how photosynthesis works in simple terms",
-  });
-  console.log(response.text);
-}
-
-main();
 
 class GenAi {
 

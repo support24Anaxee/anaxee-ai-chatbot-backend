@@ -198,10 +198,17 @@ export class SQLAssistantService {
                         query,
                         chatHistory
                     )) {
-                        yield {
-                            type: StreamEventType.CONTENT,
-                            content: chunk,
-                        };
+                        if (chunk.type === 'text' && chunk.content) {
+                            yield {
+                                type: StreamEventType.CONTENT,
+                                content: chunk.content,
+                            };
+                        } else if (chunk.type === 'chart' && chunk.spec) {
+                            yield {
+                                type: StreamEventType.CHART,
+                                chartSpec: chunk.spec,
+                            };
+                        }
                     }
                     responseGenerationTime = Date.now() - responseStart;
 
@@ -345,10 +352,17 @@ export class SQLAssistantService {
                 query,
                 chatHistory
             )) {
-                yield {
-                    type: StreamEventType.CONTENT,
-                    content: chunk,
-                };
+                if (chunk.type === 'text' && chunk.content) {
+                    yield {
+                        type: StreamEventType.CONTENT,
+                        content: chunk.content,
+                    };
+                } else if (chunk.type === 'chart' && chunk.spec) {
+                    yield {
+                        type: StreamEventType.CHART,
+                        chartSpec: chunk.spec,
+                    };
+                }
             }
             responseGenerationTime = Date.now() - responseStart;
 

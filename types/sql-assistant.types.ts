@@ -56,8 +56,24 @@ export enum StreamEventType {
     STATUS = 'status',
     CONTENT = 'content',
     METADATA = 'metadata',
+    CHART = 'chart',
     ERROR = 'error',
     DONE = 'done'
+}
+
+/**
+ * Chart specification for Recharts
+ */
+export interface ChartSpec {
+    type: 'bar' | 'line' | 'pie' | 'area' | 'scatter';
+    title: string;
+    description?: string;
+    data: Array<Record<string, any>>;
+    xKey?: string;
+    yKeys?: string[];
+    nameKey?: string; // For pie charts
+    valueKey?: string; // For pie charts
+    colors?: string[];
 }
 
 export interface StreamEvent {
@@ -66,6 +82,7 @@ export interface StreamEvent {
     sql?: string;
     rowCount?: number;
     ragSkipped?: boolean;
+    chartSpec?: ChartSpec;
 }
 
 /**

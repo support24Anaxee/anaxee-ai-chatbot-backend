@@ -6,5 +6,6 @@ export const messages = mysqlTable('messages', {
     chatId: int('chat_id').references(() => chats.id).notNull(),
     role: varchar('role', { length: 50 }).notNull(), // 'user' or 'assistant'
     content: text('content').notNull(),
+    chartSpec: text('chart_spec'),
     createdAt: timestamp('created_at').defaultNow(),
 });
