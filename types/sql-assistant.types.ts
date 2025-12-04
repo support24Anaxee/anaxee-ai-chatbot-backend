@@ -65,6 +65,7 @@ export interface StreamEvent {
     content?: string;
     sql?: string;
     rowCount?: number;
+    ragSkipped?: boolean;
 }
 
 /**

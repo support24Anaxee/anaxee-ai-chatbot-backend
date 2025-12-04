@@ -48,7 +48,7 @@ ${(lastGeneratedQuery && lastError) ? `Last Generated Query : ${lastGeneratedQue
 
 ;
 
-            const systemInstruction = `Required Output: SQL Query String
+        const systemInstruction = `Required Output: SQL Query String
 
 Instructions:
 1. Generate a MySQL query that answers the user's question based on the provided schema

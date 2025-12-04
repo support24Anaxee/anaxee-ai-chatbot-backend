@@ -10,10 +10,11 @@ import { sendError } from './utils/response';
 import { AppError } from './utils/errors';
 import logger from './utils/logger';
 
+
 const app = express();
 
 // Middleware
-app.use(cors({ origin: "http://192.168.1.112:5174" }));
+app.use(cors({ origin: "http://localhost:5173" }));
 app.use(express.json());
 app.use(morgan('dev'));
 

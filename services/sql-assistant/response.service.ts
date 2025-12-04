@@ -89,4 +89,74 @@ User Query: ${userQuery}`;
             yield `Error generating response: ${error instanceof Error ? error.message : String(error)}`;
         }
     }
+
+    /**
+     * Generate response from chat history only (without new query results)
+     */
+    async generateResponseFromHistory(
+        userQuery: string,
+        chatHistory: string
+    ): Promise<string> {
+        try {
+            const prompt = `Chat History:
+${chatHistory}
+
+User Query: ${userQuery}`;
+
+            const systemInstruction = `You are a helpful SQL assistant. Using ONLY the information from the chat history:
+1. Answer the user's question accurately and concisely
+2. Reference specific data points from the previous conversation
+3. Present information in a clear, readable format
+4. Use tables or lists when appropriate
+5. Maintain a natural, conversational tone
+6. If the user asks for clarification or details about previous results, provide them
+7. Do NOT make up or infer data that wasn't in the chat history`;
+
+            const response = await this.aiService.generateContent(
+                systemInstruction,
+                prompt,
+                0.3
+            );
+
+            return response;
+        } catch (error) {
+            logger.error('Error generating response from history:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Generate response from chat history only with streaming
+     */
+    async *generateResponseFromHistoryStream(
+        userQuery: string,
+        chatHistory: string
+    ): AsyncGenerator<string> {
+        try {
+            const prompt = `Chat History:
+${chatHistory}
+
+User Query: ${userQuery}`;
+
+            const systemInstruction = `You are a helpful SQL assistant. Using ONLY the information from the chat history:
+1. Answer the user's question accurately and concisely
+2. Reference specific data points from the previous conversation
+3. Present information in a clear, readable format
+4. Use tables or lists when appropriate
+5. Maintain a natural, conversational tone
+6. If the user asks for clarification or details about previous results, provide them
+7. Do NOT make up or infer data that wasn't in the chat history`;
+
+            for await (const chunk of this.aiService.generateContentStream(
+                systemInstruction,
+                prompt,
+                0.3
+            )) {
+                yield chunk;
+            }
+        } catch (error) {
+            logger.error('Error generating response from history stream:', error);
+            yield `Error generating response: ${error instanceof Error ? error.message : String(error)}`;
+        }
+    }
 }

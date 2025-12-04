@@ -9,16 +9,19 @@ import logger from '../utils/logger';
  * SQL Assistant Controller
  */
 
-// Store active SQL assistant instances per project
-const assistantInstances = new Map<number, SQLAssistantService>();
+// Store active SQL assistant instances per project and model
+const assistantInstances = new Map<string, SQLAssistantService>();
 
 /**
  * Get or create SQL assistant instance for a project
  */
-const getAssistantInstance = async (projectId: number): Promise<SQLAssistantService> => {
+const getAssistantInstance = async (projectId: number, model?: string): Promise<SQLAssistantService> => {
+    // Create a unique key for the instance based on projectId and model
+    const instanceKey = model ? `${projectId}_${model}` : `${projectId}`;
+
     // Check if instance exists
-    if (assistantInstances.has(projectId)) {
-        return assistantInstances.get(projectId)!;
+    if (assistantInstances.has(instanceKey)) {
+        return assistantInstances.get(instanceKey)!;
     }
 
     // Get project details
@@ -46,14 +49,15 @@ const getAssistantInstance = async (projectId: number): Promise<SQLAssistantServ
             businessRule: project.businessRule || undefined,
             dbConfig: project.dbConfig as DatabaseConfig,
         },
-        project.dbConfig as DatabaseConfig
+        project.dbConfig as DatabaseConfig,
+        model
     );
 
     // Connect to database
     await assistant.connect();
 
     // Store instance
-    assistantInstances.set(projectId, assistant);
+    assistantInstances.set(instanceKey, assistant);
 
     return assistant;
 };
@@ -120,10 +124,18 @@ export const executeQuery = async (req: Request, res: Response) => {
 export const executeQueryStream = async (req: Request, res: Response) => {
     try {
         const { projectSlug } = req.params;
-        const { query, chatId } = req.body;
+        const { query, chatId, model } = req.body;
 
         if (!query) {
             return res.status(400).json({ error: 'Query is required' });
+        }
+
+        // Validate model if provided
+        const validModels = ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-3-pro-preview'];
+        if (model && !validModels.includes(model)) {
+            return res.status(400).json({
+                error: 'Invalid model specified. Supported models: gemini-2.5-pro, gemini-2.5-flash, gemini-3-pro-preview'
+            });
         }
 
         // Get project
@@ -141,8 +153,8 @@ export const executeQueryStream = async (req: Request, res: Response) => {
             chatHistory = formatChatHistory(historyMessages);
         }
 
-        // Get assistant instance
-        const assistant = await getAssistantInstance(project.id);
+        // Get assistant instance with specified model
+        const assistant = await getAssistantInstance(project.id, model);
 
         // Set headers for SSE
         res.setHeader('Content-Type', 'text/event-stream');
@@ -283,12 +295,18 @@ export const disconnectProject = async (req: Request, res: Response) => {
             return res.status(404).json({ error: 'Project not found' });
         }
 
-        // Get and remove instance
-        const assistant = assistantInstances.get(project.id);
-        if (assistant) {
-            await assistant.disconnect();
-            assistantInstances.delete(project.id);
+        // Get and remove all instances for this project (across all models)
+        const keysToDelete: string[] = [];
+        for (const [key, assistant] of assistantInstances.entries()) {
+            // Check if the key starts with the project ID
+            if (key.startsWith(`${project.id}_`) || key === `${project.id}`) {
+                await assistant.disconnect();
+                keysToDelete.push(key);
+            }
         }
+
+        // Delete all instances
+        keysToDelete.forEach(key => assistantInstances.delete(key));
 
         res.json({ message: 'Disconnected successfully' });
     } catch (error) {

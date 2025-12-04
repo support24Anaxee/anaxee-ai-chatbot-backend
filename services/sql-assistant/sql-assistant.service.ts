@@ -1,10 +1,11 @@
-import { DatabaseService}from './database.service';
-import { SchemaService}from './schema.service';
-import { AIService}from './ai.service';
-import { QueryService}from './query.service';
-import { ResponseService}from './response.service';
-import { BusinessRuleService}from './business-rule.service';
-import { createLog}from '../sql-assistant-logging.service';
+import { DatabaseService } from './database.service';
+import { SchemaService } from './schema.service';
+import { AIService } from './ai.service';
+import { QueryService } from './query.service';
+import { ResponseService } from './response.service';
+import { BusinessRuleService } from './business-rule.service';
+import { ContextEvaluationService } from './context-evaluation.service';
+import { createLog } from '../sql-assistant-logging.service';
 import {
     DatabaseConfig,
     AIProvider,
@@ -29,18 +30,22 @@ export class SQLAssistantService {
     private queryService: QueryService;
     private responseService: ResponseService;
     private businessRuleService: BusinessRuleService;
+    private contextEvaluationService: ContextEvaluationService;
     private tableNames: string[];
     private projectConfig: ProjectConfig;
 
-    constructor(projectConfig: ProjectConfig, dbConfig: DatabaseConfig) {
+    constructor(projectConfig: ProjectConfig, dbConfig: DatabaseConfig, model?: string) {
         this.projectConfig = projectConfig;
         // Initialize services
         this.databaseService = new DatabaseService(dbConfig);
         this.schemaService = new SchemaService(this.databaseService, projectConfig.id);
 
+        // Use provided model or fallback to environment variable or default
+        const selectedModel = model || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+
         this.aiService = new AIService({
             provider: AIProvider.GEMINI,
-            model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+            model: selectedModel,
             temperature: 0.0,
         });
 
@@ -56,6 +61,8 @@ export class SQLAssistantService {
         );
 
         this.responseService = new ResponseService(this.aiService);
+
+        this.contextEvaluationService = new ContextEvaluationService();
 
         this.tableNames = projectConfig.tables || [];
     }
@@ -98,7 +105,7 @@ export class SQLAssistantService {
             const schema = await this.schemaService.getTableSchemaAsCSV(this.tableNames);
 
             // Step 2: Generate and execute SQL
-            const { sql, rows}= await this.queryService.generateAndExecute(
+            const { sql, rows } = await this.queryService.generateAndExecute(
                 this.tableNames,
                 schema,
                 query,
@@ -123,7 +130,7 @@ export class SQLAssistantService {
             );
 
             return response;
-       }catch (error) {
+        } catch (error) {
             if (
                 error instanceof DatabaseConnectionError ||
                 error instanceof SchemaRetrievalError ||
@@ -146,6 +153,7 @@ export class SQLAssistantService {
         chatId?: number
     ): AsyncGenerator<StreamEvent> {
         const startTime = Date.now();
+        let contextEvaluationTime = 0;
         let schemaFetchTime = 0;
         let sqlGenerationTime = 0;
         let queryExecutionTime = 0;
@@ -155,8 +163,82 @@ export class SQLAssistantService {
         let tokenUsage: any = null;
         let status: 'success' | 'error' | 'no_data' = 'success';
         let errorMessage: string | undefined;
+        let ragSkipped = false;
+        let contextDecision = '';
 
         try {
+            // Step 0: Evaluate if chat history has sufficient context
+            if (chatHistory && chatHistory.trim().length > 0) {
+                yield {
+                    type: StreamEventType.STATUS,
+                    content: 'Evaluating context...',
+                };
+
+                const contextEvalStart = Date.now();
+                const evaluation = await this.contextEvaluationService.evaluateContext(
+                    query,
+                    chatHistory
+                );
+                contextEvaluationTime = Date.now() - contextEvalStart;
+                contextDecision = evaluation.decision;
+
+                logger.info(`Context evaluation: ${evaluation.decision} - ${evaluation.reasoning}`);
+
+                // If context is sufficient, skip RAG and generate response from history
+                if (evaluation.decision === 'SUFFICIENT') {
+                    ragSkipped = true;
+
+                    yield {
+                        type: StreamEventType.STATUS,
+                        content: 'Generating response from context...',
+                    };
+
+                    const responseStart = Date.now();
+                    for await (const chunk of this.responseService.generateResponseFromHistoryStream(
+                        query,
+                        chatHistory
+                    )) {
+                        yield {
+                            type: StreamEventType.CONTENT,
+                            content: chunk,
+                        };
+                    }
+                    responseGenerationTime = Date.now() - responseStart;
+
+                    // Get token usage
+                    tokenUsage = this.aiService.getLastTokenUsage();
+
+                    // Send metadata indicating RAG was skipped
+                    yield {
+                        type: StreamEventType.METADATA,
+                        ragSkipped: true,
+                    };
+
+                    yield {
+                        type: StreamEventType.DONE,
+                        content: 'Done'
+                    };
+
+                    // Log successful execution with RAG skipped
+                    await createLog({
+                        chatId,
+                        projectId: this.projectConfig.id,
+                        userMessage: query,
+                        generatedSql: 'SKIPPED - Context sufficient',
+                        executionTimeMs: Date.now() - startTime,
+                        contextEvaluationTimeMs: contextEvaluationTime,
+                        responseGenerationTimeMs: responseGenerationTime,
+                        tokenUsage,
+                        status: 'success',
+                        ragSkipped,
+                        contextDecision,
+                    });
+
+                    return;
+                }
+            }
+
+            // Continue with normal RAG flow if context is not sufficient
             // Step 1: Get schema
             yield {
                 type: StreamEventType.STATUS,
@@ -171,8 +253,9 @@ export class SQLAssistantService {
                 type: StreamEventType.STATUS,
                 content: 'Generating SQL query...',
             };
+
             const sqlStart = Date.now();
-            const { sql, rows, executionTime}= await this.queryService.generateAndExecute(
+            const { sql, rows, executionTime } = await this.queryService.generateAndExecute(
                 this.tableNames,
                 schema,
                 query,
@@ -204,9 +287,12 @@ export class SQLAssistantService {
                     userMessage: query,
                     generatedSql: sql,
                     executionTimeMs: Date.now() - startTime,
+                    contextEvaluationTimeMs: contextEvaluationTime,
                     schemaFetchTimeMs: schemaFetchTime,
                     sqlGenerationTimeMs: sqlGenerationTime,
                     status,
+                    ragSkipped,
+                    contextDecision,
                 });
                 return;
             }
@@ -237,10 +323,13 @@ export class SQLAssistantService {
                     generatedSql: sql,
                     executionTimeMs: Date.now() - startTime,
                     queryExecutionTimeMs: queryExecutionTime,
+                    contextEvaluationTimeMs: contextEvaluationTime,
                     schemaFetchTimeMs: schemaFetchTime,
                     sqlGenerationTimeMs: sqlGenerationTime,
                     rowCount: 0,
                     status,
+                    ragSkipped,
+                    contextDecision,
                 });
                 return;
             }
@@ -271,6 +360,7 @@ export class SQLAssistantService {
                 type: StreamEventType.METADATA,
                 sql,
                 rowCount: rows.length,
+                ragSkipped: false,
             };
 
             yield {
@@ -285,15 +375,18 @@ export class SQLAssistantService {
                 userMessage: query,
                 generatedSql: sql,
                 executionTimeMs: Date.now() - startTime,
+                contextEvaluationTimeMs: contextEvaluationTime,
                 schemaFetchTimeMs: schemaFetchTime,
-                queryExecutionTimeMs:queryExecutionTime,
+                queryExecutionTimeMs: queryExecutionTime,
                 sqlGenerationTimeMs: sqlGenerationTime,
                 responseGenerationTimeMs: responseGenerationTime,
                 rowCount: rows.length,
                 tokenUsage,
                 status: 'success',
+                ragSkipped,
+                contextDecision,
             });
-       }catch (error) {
+        } catch (error) {
             status = 'error';
             errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -306,7 +399,7 @@ export class SQLAssistantService {
                     type: StreamEventType.ERROR,
                     content: `Error: ${error.message}`,
                 };
-           }else {
+            } else {
                 logger.error('Unexpected error in askStream():', error);
                 yield {
                     type: StreamEventType.ERROR,

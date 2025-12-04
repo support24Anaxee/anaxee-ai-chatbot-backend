@@ -4,4 +4,5 @@ export * from './ai.service';
 export * from './query.service';
 export * from './response.service';
 export * from './business-rule.service';
+export * from './context-evaluation.service';
 export * from './sql-assistant.service';

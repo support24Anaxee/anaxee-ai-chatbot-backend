@@ -11,6 +11,7 @@ export interface LogEntry {
     userMessage: string;
     generatedSql?: string;
     executionTimeMs?: number;
+    contextEvaluationTimeMs?: number;
     schemaFetchTimeMs?: number;
     sqlGenerationTimeMs?: number;
     queryExecutionTimeMs?: number;
@@ -24,6 +25,8 @@ export interface LogEntry {
     };
     status: 'success' | 'error' | 'no_data';
     errorMessage?: string;
+    ragSkipped?: boolean;
+    contextDecision?: string;
 }
 
 /**
