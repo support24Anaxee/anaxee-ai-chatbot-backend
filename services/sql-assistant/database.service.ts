@@ -98,7 +98,7 @@ export class DatabaseService {
         }
     }
 
-    /**
+    /*
      * Test database connection
      */
     async testConnection(): Promise<boolean> {

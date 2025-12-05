@@ -22,5 +22,6 @@ export const sqlAssistantLogs = mysqlTable('sql_assistant_logs', {
     }>(),
     status: varchar('status', { length: 50 }).notNull().default('success'), // 'success', 'error', 'no_data'
     errorMessage: text('error_message'),
+    modelName: varchar('model_name', { length: 100 }),
     createdAt: timestamp('created_at').defaultNow(),
 });

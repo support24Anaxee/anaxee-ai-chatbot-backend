@@ -239,6 +239,7 @@ export class SQLAssistantService {
                         status: 'success',
                         ragSkipped,
                         contextDecision,
+                        modelName: this.aiService['config'].model,
                     });
 
                     return;
@@ -300,6 +301,7 @@ export class SQLAssistantService {
                     status,
                     ragSkipped,
                     contextDecision,
+                    modelName: this.aiService['config'].model,
                 });
                 return;
             }
@@ -337,6 +339,7 @@ export class SQLAssistantService {
                     status,
                     ragSkipped,
                     contextDecision,
+                    modelName: this.aiService['config'].model,
                 });
                 return;
             }
@@ -399,6 +402,7 @@ export class SQLAssistantService {
                 status: 'success',
                 ragSkipped,
                 contextDecision,
+                modelName: this.aiService['config'].model,
             });
         } catch (error) {
             status = 'error';
@@ -433,6 +437,7 @@ export class SQLAssistantService {
                 rowCount,
                 status,
                 errorMessage,
+                modelName: this.aiService['config'].model,
             });
         }
     }

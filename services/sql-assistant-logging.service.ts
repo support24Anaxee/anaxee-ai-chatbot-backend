@@ -27,6 +27,7 @@ export interface LogEntry {
     errorMessage?: string;
     ragSkipped?: boolean;
     contextDecision?: string;
+    modelName?: string;
 }
 
 /**
@@ -48,6 +49,7 @@ export const createLog = async (entry: LogEntry) => {
             tokenUsage: entry.tokenUsage,
             status: entry.status,
             errorMessage: entry.errorMessage,
+            modelName: entry.modelName,
         }).$returningId();
 
         return result.id;
